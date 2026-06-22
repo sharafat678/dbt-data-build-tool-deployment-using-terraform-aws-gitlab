@@ -5,34 +5,24 @@ stages:
   - dag-logic
   - build-image
   - destroy
-  # - default     ..............
 
 variables:
   REGION: cn-northwest-1 #$REGION
   AWS_PARTITION: aws-cn
   ROLE_ARN: arn:aws-cn:iam::$AWS_ACCOUNT_ID:role/team-account-deploy-gitlabscaniacomcn-dbt
-  AWS_ACCOUNT_ID: 216962084862 #$AWS_ACCOUNT_ID
+  AWS_ACCOUNT_ID: $AWS_ACCOUNT_ID
   DOCKER_HOST: tcp://docker:2375  # This environment variable sets the address of the Docker daemon for the pipeline to communicate with. It tells the CI job to use a remote Docker daemon available at the specified TCP address.
   DOCKER_TLS_CERTDIR: "" #This environment variable disables the use of Docker's TLS certificate directory for secure connections to the Docker daemon.Docker-in-Docker (DinD) by default uses TLS for security, but setting this to an empty string disables TLS for simplicity during CI/CD execution. It's typically done in a trusted environment where security of the Docker daemon communication isn't a concern.
-  ECR_URL: 216962084862.dkr.ecr.cn-northwest-1.amazonaws.com.cn #$ECR_URL
-  SNOWFLAKE_ACCOUNT: pk62523.cn-northwest-1.aws #SCANIA.SCANIA_SANDBOX #pk62523.cn-northwest-1.aws #$SNOWFLAKE_ACCOUNT
-  SNOWFLAKE_USER: ALEXFU #SharafatHussain #$SNOWFLAKE_USER
+  ECR_URL: $AWS_ACCOUNT_ID.dkr.ecr.cn-northwest-1.amazonaws.com.cn #$ECR_URL
+  SNOWFLAKE_ACCOUNT: $SNOWFLAKE_ACCOUNT
+  SNOWFLAKE_USER: $SNOWFLAKE_USER
   #donot declare sensitive variables....
-  SNOWFLAKE_PASSWORD: Highbury131211!@# #M@no6789 #$SNOWFLAKE_PASSWORD
-  MAXIMO_USER: ALEXFU #SharafatHussain #$SNOWFLAKE_USER
-  #donot declare sensitive variables....
-  MAXIMO_PASSWORD: Highbury131211!@# #M@no6789 #$SNOWFLAKE_PASSWORD
-  repo_name: dbt-repo-dev-dbt-s3 #$repo_name
-  # bucket_name: dbt-bucket-dev #$bucket_name
-  
-# Either we need cache or either we clean - rm -rf ./IAC/root/.terraform. if need both then use cache in stage not here......。..
-# cache: # The cache keyword in GitLab ,pipelines is used to specify files or directories that should be cached between jobs or pipeline runs. This caches the .terraform directory under the specified path (./IAC/root/), which contains Terraform's initialized backend files and downloaded provider plugins.Using the cache avoids re-downloading these files in subsequent pipeline runs, saving time and reducing external dependencies.
-#   paths:
-#     - ./IAC/root/.terraform.
-
+  SNOWFLAKE_PASSWORD: $SNOWFLAKE_PASSWORD
+  repo_name: $repo_name
+ 
 default:
   image: 
-    name: "registry.gitlab.scania.com.cn/datalake/dbt-infra-s3:latest" #"registry.gitlab.scania.com.cn/datalake/dbt-multi:latest" 
+    name: "registry.gitlab.scania.com.cn/datalake/dbt-infra-s3:latest" # terraform + aws-cli  image
     entrypoint: [""]
   id_tokens:
     GITLAB_OIDC_TOKEN:
@@ -69,16 +59,13 @@ IAC:
         -var "maximo_user=$MAXIMO_USER" \
         -var "maximo_password=$MAXIMO_PASSWORD"
 
-    # -var "s3_bucket_name=$bucket_name" \
-        # -var "ecr_repository_name=$repo_name"
-
     - terraform apply -input=false --auto-approve "planfile"
   rules:
     - changes:
         - IAC/**/*
   
   when: manual
-#  retry: 2
+  retry: 2
 
 
 
@@ -97,8 +84,7 @@ ssm-logic:
     - cd $CI_PROJECT_DIR
     # Parse Terraform output JSON
   
-
-      # Store subnet IDs (as JSON string)
+    # Store subnet IDs (as JSON string)
     - aws ssm put-parameter --name "/airflow/subnet_ids" --value "$(jq -c '.subnet_ids.value' $TF_OUTPUT)" --type String --overwrite
 
     # Store security groups (as JSON string)
@@ -115,105 +101,44 @@ ssm-logic:
 
     # Store SNS topic ARN
     - aws ssm put-parameter --name "/airflow/sns_topic_arn" --value "$(jq -r '.sns_topic_arn.value' $TF_OUTPUT)" --type String --overwrite
-  when: manual
-   #- aws s3 ls s3://$bucket_name/dags/           
-  #basically: run this job only if changes happen inside dags/ or IAC/ directories.
-  # rules:
-  #   - changes:
-  #       - dags/**
-  #       - IAC/** 
-#   retry: 2
 
 
-
-
-
-
-
-
-# dag-logic:
-#   stage: dag-logic
-#   before_script:
-#     - !reference [.assume_role]
-#   script:
-#     - pwd
-#     - cd IAC/root/
-#     - unzip -o my_terraform_providers.zip -d my_terraform_providers
-#     - terraform init -input=false -reconfigure
-#     - terraform output -json > $CI_PROJECT_DIR/terraform_outputs.json
-#     - cat $CI_PROJECT_DIR/terraform_outputs.json
-#     - cd $CI_PROJECT_DIR
-#     - chmod +x update_dag.sh
-#     - ./update_dag.sh   #this logic will update and upload the dag file in the s3 bucket
-#     - cat dags/dbt_ecs_task.py
-#    #- aws s3 ls s3://$bucket_name/dags/           
-#   #basically: run this job only if changes happen inside dags/ or IAC/ directories.
-#   # rules:
-#   #   - changes:
-#   #       - dags/**
-#   #       - IAC/** 
-# #   retry: 2
-
-
-# build-image:
-#   stage: build-image
-#   services:
-#     - name: "public.ecr.aws/b4p2j5t6/dind:latest"  # Use the custom dind image........
-#       alias: docker
-#   before_script:
-#     - !reference [.assume_role]
-#   script:
-#     - docker info
-#     - docker build -t $repo_name -f ./project/Dockerfile ./project
-#     - aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.cn-northwest-1.amazonaws.com.cn
-#     # Remove the existing image in ECR (tag: latest)
-#     - aws ecr batch-delete-image --repository-name "$repo_name" --image-ids imageTag=latest --region "$REGION" || echo "No existing image to delete"
-#     - docker tag $repo_name:latest $ECR_URL/$repo_name:latest
-#     - docker push $ECR_URL/$repo_name:latest
-#   rules:
-#     - changes:
-#         - project/**
-#   # retry: 2
-
-
-
-destroy:
-  stage: destroy
+dag-logic:
+  stage: dag-logic
   before_script:
     - !reference [.assume_role]
   script:
-    - |
-      aws s3api list-object-versions --bucket $bucket_name \
-        --query "Versions[].[Key,VersionId]" --output text | while read key version_id; do
-          aws s3api delete-object --bucket $bucket_name \
-            --key "$key" --version-id "$version_id"
-        done > /dev/null 2>&1 || true
-    - aws ecr batch-delete-image --repository-name $repo_name --image-ids imageTag=latest > /dev/null 2>&1 || true
-    
-    - cd IAC/root
+    - pwd
+    - cd IAC/root/
     - unzip -o my_terraform_providers.zip -d my_terraform_providers
     - terraform init -input=false -reconfigure
-    # - >
-    #   terraform plan -out=planfile
-    #   -var "snowflake_account=$SNOWFLAKE_ACCOUNT"
-    #   -var "snowflake_user=$SNOWFLAKE_USER"
-    #   -var "snowflake_password=$SNOWFLAKE_PASSWORD"
-    #   -var "s3_bucket_name=$bucket_name"
-    #   -var "ecr_repository_name=$repo_name" 
-    # - terraform destroy -var="snowflake_account=$SNOWFLAKE_ACCOUNT" -var="snowflake_user=$SNOWFLAKE_USER" -var="snowflake_password=$SNOWFLAKE_PASSWORD" -var="s3_bucket_name=$bucket_name" -var="ecr_repository_name=$repo_name" -auto-approve
-    - terraform validate
-    - >
-      terraform plan -destroy -out=destroyplan \
-        -var-file="terraform.tfvars" \
-        -var "snowflake_account=$SNOWFLAKE_ACCOUNT" \
-        -var "snowflake_user=$SNOWFLAKE_USER" \
-        -var "snowflake_password=$SNOWFLAKE_PASSWORD" \
-        -var "maximo_user=$MAXIMO_USER" \
-        -var "maximo_password=$MAXIMO_PASSWORD"
+    - terraform output -json > $CI_PROJECT_DIR/terraform_outputs.json
+    - cat $CI_PROJECT_DIR/terraform_outputs.json
+    - cd $CI_PROJECT_DIR
+    - chmod +x update_dag.sh
+    - ./update_dag.sh   #this logic will update and upload the dag file in the s3 bucket
+    - cat dags/dbt_ecs_task.py
+  #basically: run this job only if changes happen inside dags/ or IAC/ directories.
+  rules:
+    - changes:
+        - dags/**
+        - IAC/** 
 
-    # -var "s3_bucket_name=$bucket_name" \
-        # -var "ecr_repository_name=$repo_name"
-
-    #- terraform destroy -input=false --auto-approve "planfile" 
-    - terraform apply -auto-approve "destroyplan"
-  when: manual
+build-image:
+  stage: build-image
+  services:
+    - name: "public.ecr.aws/b4p2j5t6/dind:latest"  # Use the custom dind image........
+      alias: docker
+  before_script:
+    - !reference [.assume_role]
+  script:
+    - docker info
+    - docker build -t $repo_name -f ./project/Dockerfile ./project
+    - aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.cn-northwest-1.amazonaws.com.cn
+    # Remove the existing image in ECR (tag: latest)
+    - aws ecr batch-delete-image --repository-name "$repo_name" --image-ids imageTag=latest --region "$REGION" || echo "No existing image to delete"
+    - docker tag $repo_name:latest $ECR_URL/$repo_name:latest
+    - docker push $ECR_URL/$repo_name:latest
+  rules:
+    - changes:
+        - project/**
