@@ -102,3 +102,8 @@ The deployment incorporates modern, secure methods such as GitLab OIDC for crede
 
 This document presents a streamlined and professional approach to deploying dbt projects on AWS ECS Fargate through GitLab and Terraform. By following this solution, professionals can achieve efficient, secure, and scalable deployments while leveraging the capabilities of AWS and integrated tools. The accompanying code repository further aids in understanding and replicating this deployment process.
 
+## **Importat Note**
+
+In the practical scenario we have split the repos's into two one for the infra and second repo only for the data engineers so that when ever data engineers push new changes into the project folder then it will not impact the infra part and changes are only applied to the data part. 
+
+
