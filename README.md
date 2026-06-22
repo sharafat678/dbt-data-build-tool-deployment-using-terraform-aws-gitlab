@@ -104,6 +104,6 @@ This document presents a streamlined and professional approach to deploying dbt 
 
 ## **Importat Note**
 
-In the practical scenario we have split the repos's into two one for the infra and second repo only for the data engineers so that when ever data engineers push new changes into the project folder then it will not impact the infra part and changes are only applied to the data part. 
+In the practical scenario we have split the repo into two, one for the infra and second repo only for the data engineers only as you can see in the diagram. And that repo only contains the project folder, So that when ever data engineers push new changes into the project folder then it will not impact the infra part and changes are only applied to the data part. 
 
 
